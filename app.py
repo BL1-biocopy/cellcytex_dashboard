@@ -11,7 +11,11 @@ import atexit
 # Import the CytenaProcessor from parser.py (in the same directory)
 from parser import CytenaProcessor
 
-app = Flask(__name__)
+# Get the absolute path to the application directory
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(__name__, 
+            template_folder=os.path.join(BASE_DIR, 'templates'))
 app.secret_key = 'your-secret-key-change-in-production'
 
 # Create a temporary directory for uploads that will be cleaned up
@@ -47,7 +51,7 @@ def download_file(filename):
     """Serve downloadable files"""
     try:
         from flask import send_file
-        file_path = os.path.join('./downloadable_data/', filename)
+        file_path = os.path.join(BASE_DIR, 'downloadable_data', filename)
         
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404

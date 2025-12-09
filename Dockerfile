@@ -45,6 +45,9 @@ RUN mkdir -p templates downloadable_data && \
 # Copy template files
 COPY --chown=appuser:appuser templates/ ./templates/
 
+# Copy downloadable data files if they exist
+COPY --chown=appuser:appuser downloadable_data/ ./downloadable_data/
+
 # Switch to non-root user
 USER appuser
 
