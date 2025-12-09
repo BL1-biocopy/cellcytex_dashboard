@@ -508,7 +508,7 @@
                         <a href="/download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Sample Dataset
                         </a>
-                        <a href="/download/well_metadata_template.xlsx" class="btn btn-primary-modern btn-modern" download>
+                        <a href="/download/template_metadata.xlsx" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Well Metadata Template
                         </a>
                     </div>
@@ -1004,9 +1004,9 @@
             const experimentId = document.getElementById('experimentIdInput').value.trim();
             
             // Build main title with Scan ID and optional Experiment ID
-            let mainTitle = `Scan ID: ${scanId || 'Unknown'}`;
+            let mainTitle = `${scanId || 'Unknown'}`;
             if (experimentId) {
-                mainTitle += ` | Experiment ID: ${experimentId}`;
+                mainTitle += ` | ${experimentId}`;
             }
             
             // Subtitle with attribute vs time
@@ -1020,6 +1020,17 @@
             
             // Format y-axis label with unit
             const yAxisLabel = attribute.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + (unit ? ` (${unit})` : '');
+
+            // Calculate x-axis range from data
+            let maxX = 0;
+            chartDatasets.forEach(dataset => {
+                dataset.data.forEach(point => {
+                    if (point.x > maxX) maxX = point.x;
+                });
+            });
+            
+            // Add 5% margin to the max value
+            const xAxisMax = maxX * 1.05;
 
             chart = new Chart(ctx, {
                 type: 'line',
@@ -1070,6 +1081,8 @@
                     scales: {
                         x: {
                             type: 'linear',
+                            min: 0,
+                            max: xAxisMax,
                             title: {
                                 display: true,
                                 text: 'Time (min)',

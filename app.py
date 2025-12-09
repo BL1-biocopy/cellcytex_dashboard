@@ -47,7 +47,7 @@ def download_file(filename):
     """Serve downloadable files"""
     try:
         from flask import send_file
-        file_path = os.path.join('downloadable_files', filename)
+        file_path = os.path.join('./downloadable_data/', filename)
         
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404

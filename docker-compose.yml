@@ -6,15 +6,17 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      # Mount the downloadable_files directory for sample data
-      - ./downloadable_files:/app/downloadable_files:ro
-      # Optional: Mount for development (comment out for production)
-      # - ./app.py:/app/app.py
-      # - ./parser.py:/app/parser.py
-      # - ./templates:/app/templates
+      # Mount source code for live development (ENABLED by default)
+      # Comment these out for production deployment
+      - ./app.py:/app/app.py
+      - ./parser.py:/app/parser.py
+      - ./templates:/app/templates
+      # Mount the downloadable_data directory for sample data
+      - ./downloadable_data:/app/downloadable_data:ro
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=development
       - FLASK_APP=app.py
+      - FLASK_DEBUG=1
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/"]

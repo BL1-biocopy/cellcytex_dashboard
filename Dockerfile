@@ -39,7 +39,7 @@ COPY --chown=appuser:appuser parser.py .
 COPY --chown=appuser:appuser app.py .
 
 # Create necessary directories with proper ownership
-RUN mkdir -p templates downloadable_files && \
+RUN mkdir -p templates downloadable_data && \
     chown -R appuser:appuser /app
 
 # Copy template files
