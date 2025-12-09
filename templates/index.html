@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cytena Data Dashboard</title>
+    <title>CELLCYTE X Dashboard</title>
     
     <!-- Bootstrap 5.3 CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
     <style>
-        /* Modern Cytena Dashboard Styles */
+        /* Styles */
         :root {
             /* Brand Colors */
             --primary-color: #2C4255;
@@ -477,7 +477,7 @@
         <div class="container-fluid">
             <span class="navbar-brand">
                 <i class="bi bi-graph-up-arrow me-2"></i>
-                Cytena Data Dashboard
+                CELLCYTE X Dashboard
             </span>
             <button class="btn btn-outline-light btn-sm" onclick="resetSession()">
                 <i class="bi bi-arrow-clockwise me-1"></i>
@@ -500,9 +500,9 @@
                 </div>
                 <div class="step-body">
                     <ul class="mb-4" style="font-size: 1rem; line-height: 1.8;">
-                        <li>Download analysis results from the Cytena study in csv format</li>
-                        <li>Fill excel template with well information (download template below)</li>
-                        <li>Upload csv files and filled excel file below</li>
+                        <li>Download analysis results from the study in CSV format</li>
+                        <li>Fill Excel template with well information (download below) OR upload JSON metadata file exported from the instrument</li>
+                        <li>Upload CSV files and filled Excel/JSON file</li>
                     </ul>
                     <div class="d-flex gap-3 flex-wrap">
                         <a href="/download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
@@ -526,7 +526,7 @@
                         <i class="bi bi-cloud-upload upload-icon"></i>
                         <h5 class="mb-3">Upload Your Files</h5>
                         <p class="text-muted mb-3">
-                            Upload CSV files from Cytena scan instrument and Excel file with well metadata
+                            Upload CSV files from the instrument and Excel file with well metadata
                         </p>
                         <button class="btn btn-primary-modern btn-modern" onclick="document.getElementById('fileInput').click()">
                             <i class="bi bi-folder-plus me-2"></i>Choose Files
@@ -546,9 +546,33 @@
             <div class="step-card" id="controls-card" style="display: none;">
                 <div class="step-header">
                     <span class="step-number">2</span>
-                    <h3 class="step-title">Visualization Controls</h3>
+                    <h3 class="step-title">Visualization</h3>
                 </div>
                 <div class="step-body">
+                    <!-- Scan ID and Experiment ID Section -->
+                    <div class="alert alert-modern" style="background: #f8f9fa; border-color: var(--secondary-teal);">
+                        <div class="row align-items-center">
+                            <div class="col-md-6 mb-2 mb-md-0">
+                                <label class="form-label mb-1">
+                                    <i class="bi bi-fingerprint me-1"></i>
+                                    <strong>Scan ID:</strong>
+                                </label>
+                                <div id="scanIdDisplay" class="text-muted">
+                                    <span class="badge" style="background: var(--primary-bg); font-size: 1rem; padding: 0.5rem 1rem;">-</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="experimentIdInput" class="form-label mb-1">
+                                    <i class="bi bi-tag me-1"></i>
+                                    <strong>Experiment ID (optional):</strong>
+                                </label>
+                                <input type="text" class="form-control" id="experimentIdInput" 
+                                       placeholder="Enter experiment ID..." 
+                                       onchange="updatePlot()">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="controls-section">
                         <div class="row mb-3">
                             <div class="col-md-6 mb-3">
@@ -623,7 +647,7 @@
             <div class="text-center">
                 <small class="text-muted">
                     <i class="bi bi-graph-up-arrow"></i>
-                    Cytena Data Dashboard v1.0
+                    CELLCYTE X Dashboard v1.0
                 </small>
             </div>
         </div>
@@ -643,6 +667,7 @@
         };
         let selectedWellGroups = [];
         let wellGroupsWithData = []; // Track which well groups have data for current selection
+        let scanId = null; // Store scan ID
 
         // File input handling - auto upload when files selected
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -696,11 +721,16 @@
 
                 if (result.success) {
                     sessionId = result.session_id;
+                    scanId = result.scan_id || 'Unknown';
                     availableData = {
                         channels: result.channels,
                         attributes: result.attributes,
                         wellGroups: result.well_groups
                     };
+
+                    // Display scan ID
+                    document.getElementById('scanIdDisplay').innerHTML = 
+                        `<span class="badge" style="background: var(--primary-bg); font-size: 1rem; padding: 0.5rem 1rem;">${scanId}</span>`;
 
                     showAlert(`Successfully processed ${result.uploaded_files.length} files!`, 'success');
                     populateControls();
@@ -970,10 +1000,23 @@
                 tension: 0.3
             }));
 
-            const chartTitle = `${attribute.replace(/_/g, ' ').toUpperCase()} vs Time (${channel})`;
+            // Get experiment ID from input
+            const experimentId = document.getElementById('experimentIdInput').value.trim();
+            
+            // Build main title with Scan ID and optional Experiment ID
+            let mainTitle = `Scan ID: ${scanId || 'Unknown'}`;
+            if (experimentId) {
+                mainTitle += ` | Experiment ID: ${experimentId}`;
+            }
+            
+            // Subtitle with attribute vs time
+            const subtitle = `${attribute.replace(/_/g, ' ').toUpperCase()} vs Time (${channel})`;
             
             // Update chart title in header
-            document.getElementById('chartTitle').textContent = chartTitle;
+            const headerTitle = experimentId 
+                ? `${experimentId} - ${scanId}` 
+                : scanId || 'Unknown';
+            document.getElementById('chartTitle').textContent = headerTitle;
             
             // Format y-axis label with unit
             const yAxisLabel = attribute.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) + (unit ? ` (${unit})` : '');
@@ -989,12 +1032,16 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: chartTitle,
+                            text: [mainTitle, subtitle],
                             font: {
-                                size: 18,
+                                size: 16,
                                 weight: 'bold'
                             },
-                            color: '#2C4255'
+                            color: '#2C4255',
+                            padding: {
+                                top: 10,
+                                bottom: 20
+                            }
                         },
                         legend: {
                             display: true,
@@ -1069,11 +1116,17 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 
-                // Generate filename with timestamp and current selections
+                // Generate filename with scan ID, experiment ID, timestamp and current selections
                 const attribute = document.getElementById('attributeSelect').value;
                 const channel = document.getElementById('channelSelect').value;
+                const experimentId = document.getElementById('experimentIdInput').value.trim();
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                const filename = `cytena_plot_${attribute}_${channel}_${timestamp}.png`;
+                
+                let filename = 'cytena_plot';
+                if (experimentId) {
+                    filename += `_${experimentId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                }
+                filename += `_${scanId || 'unknown'}_${attribute}_${channel}_${timestamp}.png`;
                 
                 link.download = filename;
                 link.href = url;
@@ -1100,9 +1153,12 @@
 
                 // Reset UI
                 sessionId = null;
+                scanId = null;
                 selectedFiles = [];
                 selectedWellGroups = [];
                 document.getElementById('fileInput').value = '';
+                document.getElementById('experimentIdInput').value = '';
+                document.getElementById('scanIdDisplay').innerHTML = '<span class="badge" style="background: var(--primary-bg); font-size: 1rem; padding: 0.5rem 1rem;">-</span>';
                 document.getElementById('controls-card').style.display = 'none';
                 document.getElementById('chartContainer').style.display = 'none';
                 

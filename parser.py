@@ -26,7 +26,7 @@ class CytenaProcessor:
         if not dir_path.exists():
             raise FileNotFoundError(f"Data directory not found: {data_dir}")
         
-        supported_file_extensions=['.csv', '.xlsx']
+        supported_file_extensions=['.csv', '.xlsx', '.json']
 
         # Check for supported files
         found_files = []
@@ -40,6 +40,25 @@ class CytenaProcessor:
             )
         
         return dir_path
+    
+    def _well_to_label(self,well):
+        row_letter = string.ascii_uppercase[well["Row"]]   # 0 → A, 1 → B, ...
+        col_number = well["Column"] + 1                    # 0 → 1, 1 → 2, ...
+        return f"{row_letter}{col_number}"
+
+    def _parse_json_metadata(self, json_path: str) -> dict:
+        """
+        Parse JSON metadata file to extract well group information.
+        Args:
+            json_path: Path to directory containing AnalysisWellGroup.json (exported from CELLCYTE X instrument)
+        Returns:
+            dict: Mapping of well group names to lists of well labels, e.g. {"Group1": ["A1", "A2"], "Group2": ["B1", "B2"]}
+        """
+        with open(os.path.join(json_path, "AnalysisWellGroup.json"), 'r') as f:
+            content = json.load(f)
+        metadata = {group["GroupName"]: [self._well_to_label(w) for w in group["SelectedWells"]] 
+                  for group in content["AnalysisWellGroupsCollection"]}
+        return metadata
 
     def _extract_scan_id(self, data_dir):
         prefixes=set()
@@ -114,16 +133,29 @@ class CytenaProcessor:
 
         #find excel file in data_dir and print error if not found or multiple found
         excel_files=[file for file in os.listdir(data_dir) if file.endswith('.xlsx')]
-        if len(excel_files)==0:
-            print("ERROR: No Excel file found in data directory")
-        if len(excel_files)>1:
-            print("ERROR: Multiple Excel files found in data directory")
-        excel_path=os.path.join(data_dir,excel_files[0])
-        print("Excel file found:", excel_path)
-        metadata=pd.read_excel(excel_path, engine='openpyxl')  # Test if file can be opened
-        metadata["Well Group"]=metadata[metadata.columns[1:]].astype(str).agg(' '.join, axis=1)
-        #make new column "Well Group" by combining all columns 
-
+        if len(excel_files)==1:
+            excel_path=os.path.join(data_dir,excel_files[0])
+            print("Excel file found:", excel_path)
+            metadata=pd.read_excel(excel_path, engine='openpyxl')  # Test if file can be opened
+            metadata["Well Group"]=metadata[metadata.columns[1:]].astype(str).agg(' '.join, axis=1) #make new column "Well Group" by combining all columns 
+        elif len(excel_files)>1:
+            print("ERROR: Multiple Excel files found in data directory. Expects only one Excel file.")
+        elif len(excel_files)==0:
+            print("INFO: No Excel file found in data directory, looking for JSON file")
+            json_files=[file for file in os.listdir(data_dir) if file.endswith('.json')]
+            if len(json_files)>1:
+                print("ERROR: Multiple JSON files found in data directory")
+            elif len(json_files)==0:
+                print("ERROR: No JSON file found in data directory. Metadata extraction is not possible.")
+            elif len(json_files)==1:
+                print("JSON file found:", json_files[0])
+                metadata_dict=self._parse_json_metadata(data_dir)
+                #convert metadata_dict to dataframe with columns "Well" and "Well Group"
+                metadata_rows=[]
+                for group, wells in metadata_dict.items():
+                    for well in wells:
+                        metadata_rows.append({"Well":well, "Well Group":group})
+                metadata=pd.DataFrame(metadata_rows)
         # convert all dataframes in data_dict_processed to their long format and store them in a separate dictionary called data_dict_long
         data_dict_long={}
         for label, df in data_dict_processed.items():

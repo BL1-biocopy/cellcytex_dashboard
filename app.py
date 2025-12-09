@@ -1,24 +1,36 @@
 import os
 import json
+import tempfile
 from flask import Flask, render_template, request, jsonify, session
 from werkzeug.utils import secure_filename
 import pandas as pd
 from pathlib import Path
 import shutil
+import atexit
 
 # Import the CytenaProcessor from parser.py (in the same directory)
 from parser import CytenaProcessor
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'
-app.config['UPLOAD_FOLDER'] = './uploads'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Create a temporary directory for uploads that will be cleaned up
+TEMP_BASE_DIR = tempfile.mkdtemp(prefix='cytena_uploads_')
+app.config['UPLOAD_FOLDER'] = TEMP_BASE_DIR
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
 # Store processed data in memory (in production, use Redis or database)
 processed_data = {}
+
+# Cleanup function to remove temp directory on exit
+def cleanup_temp_dir():
+    """Clean up temporary directory on application exit"""
+    if os.path.exists(TEMP_BASE_DIR):
+        shutil.rmtree(TEMP_BASE_DIR, ignore_errors=True)
+        print(f"Cleaned up temporary directory: {TEMP_BASE_DIR}")
+
+# Register cleanup function
+atexit.register(cleanup_temp_dir)
 
 def allowed_file(filename):
     """Check if file has allowed extension"""
@@ -71,7 +83,7 @@ def upload_files():
                 uploaded_files.append(filename)
         
         if not uploaded_files:
-            shutil.rmtree(session_dir)
+            shutil.rmtree(session_dir, ignore_errors=True)
             return jsonify({'error': 'No valid files uploaded'}), 400
         
         # Process the data using CytenaProcessor
@@ -108,17 +120,21 @@ def upload_files():
                 well_groups = sorted(results_agg['Well Group'].dropna().unique().tolist(), 
                                    key=lambda x: str(x))
             
+            # Get scan ID
+            scan_id = results_agg['Scan ID'].iloc[0] if 'Scan ID' in results_agg.columns else 'Unknown'
+            
             return jsonify({
                 'success': True,
                 'session_id': session_id,
                 'channels': available_channels,
                 'attributes': available_attributes,
                 'well_groups': well_groups,
-                'uploaded_files': uploaded_files
+                'uploaded_files': uploaded_files,
+                'scan_id': scan_id
             })
             
         except Exception as e:
-            shutil.rmtree(session_dir)
+            shutil.rmtree(session_dir, ignore_errors=True)
             return jsonify({'error': f'Processing error: {str(e)}'}), 500
         
     except Exception as e:
@@ -236,7 +252,7 @@ def get_plot_data():
 
 @app.route('/clear_session', methods=['POST'])
 def clear_session():
-    """Clear session data"""
+    """Clear session data and remove temporary files"""
     try:
         data = request.json
         session_id = data.get('session_id')
@@ -246,10 +262,11 @@ def clear_session():
             if session_id in processed_data:
                 del processed_data[session_id]
             
-            # Remove uploaded files
+            # Remove session's temporary files
             session_dir = os.path.join(app.config['UPLOAD_FOLDER'], session_id)
             if os.path.exists(session_dir):
-                shutil.rmtree(session_dir)
+                shutil.rmtree(session_dir, ignore_errors=True)
+                print(f"Cleaned up session directory: {session_dir}")
         
         return jsonify({'success': True})
     except Exception as e:
