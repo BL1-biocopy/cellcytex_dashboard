@@ -3,19 +3,29 @@ import json
 import tempfile
 from flask import Flask, render_template, request, jsonify, session
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 import pandas as pd
 from pathlib import Path
 import shutil
 import atexit
 
+
 # Import the CytenaProcessor from parser.py (in the same directory)
 from parser import CytenaProcessor
 
+print("\n" + "="*60)
+print("🚀 CELLCYTE X DASHBOARD - VERSION 2.0 - UPDATED!")
+print("="*60)
+
 # Get the absolute path to the application directory
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-
 app = Flask(__name__, 
             template_folder=os.path.join(BASE_DIR, 'templates'))
+
+# Fix for running behind Caddy proxy
+app.config['APPLICATION_ROOT'] = '/cellcytex_dashboard'
+app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+
 app.secret_key = 'your-secret-key-change-in-production'
 
 # Create a temporary directory for uploads that will be cleaned up
