@@ -505,10 +505,10 @@
                         <li>Upload CSV files and filled Excel/JSON file</li>
                     </ul>
                     <div class="d-flex gap-3 flex-wrap">
-                        <a href="/download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
+                        <a href="download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Sample Dataset
                         </a>
-                        <a href="/download/template_metadata.xlsx" class="btn btn-primary-modern btn-modern" download>
+                        <a href="download/template_metadata.xlsx" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Well Metadata Template
                         </a>
                     </div>
@@ -862,7 +862,7 @@
             showLoading(true);
 
             try {
-                const response = await fetch('/get_plot_data', {
+                const response = await fetch('get_plot_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -938,7 +938,7 @@
             }
 
             try {
-                const response = await fetch('/get_plot_data', {
+                const response = await fetch('get_plot_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
