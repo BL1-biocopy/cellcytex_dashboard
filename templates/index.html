@@ -505,10 +505,10 @@
                         <li>Upload CSV files and filled Excel/JSON file</li>
                     </ul>
                     <div class="d-flex gap-3 flex-wrap">
-                        <a href="download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
+                        <a href="/download/sample_dataset.zip" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Sample Dataset
                         </a>
-                        <a href="download/template_metadata.xlsx" class="btn btn-primary-modern btn-modern" download>
+                        <a href="/download/template_metadata.xlsx" class="btn btn-primary-modern btn-modern" download>
                             <i class="bi bi-download me-2"></i>Download Well Metadata Template
                         </a>
                     </div>
@@ -862,7 +862,7 @@
             showLoading(true);
 
             try {
-                const response = await fetch('get_plot_data', {
+                const response = await fetch('/get_plot_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -938,7 +938,7 @@
             }
 
             try {
-                const response = await fetch('get_plot_data', {
+                const response = await fetch('/get_plot_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -977,28 +977,72 @@
                 chart.destroy();
             }
 
-            // Generate colors for each dataset
-            const colors = [
-                'rgb(162, 197, 16)',   // primary-accent
-                'rgb(67, 141, 153)',   // secondary-teal
-                'rgb(142, 202, 230)',  // secondary-blue
-                'rgb(152, 208, 188)',  // secondary-mint
-                'rgb(240, 128, 0)',    // accent-orange
-                'rgb(251, 184, 0)',    // accent-yellow
-                'rgb(79, 61, 127)',    // accent-purple
-                'rgb(198, 30, 25)'     // accent-red
-            ];
+            // Generate unlimited distinct colors using HSL color space
+            function generateDistinctColors(count) {
+                const colors = [];
+                
+                // Start with the brand colors
+                const brandColors = [
+                    'rgb(162, 197, 16)',   // primary-accent
+                    'rgb(67, 141, 153)',   // secondary-teal
+                    'rgb(142, 202, 230)',  // secondary-blue
+                    'rgb(152, 208, 188)',  // secondary-mint
+                    'rgb(240, 128, 0)',    // accent-orange
+                    'rgb(251, 184, 0)',    // accent-yellow
+                    'rgb(79, 61, 127)',    // accent-purple
+                    'rgb(198, 30, 25)'     // accent-red
+                ];
+                
+                // Use brand colors first
+                for (let i = 0; i < Math.min(count, brandColors.length); i++) {
+                    colors.push(brandColors[i]);
+                }
+                
+                // Generate additional colors if needed
+                if (count > brandColors.length) {
+                    const additionalCount = count - brandColors.length;
+                    const goldenRatio = 0.618033988749895;
+                    let hue = Math.random(); // Start with random hue for variety
+                    
+                    for (let i = 0; i < additionalCount; i++) {
+                        hue += goldenRatio;
+                        hue %= 1;
+                        
+                        // Vary saturation and lightness for more distinction
+                        const saturation = 60 + (i % 3) * 15; // 60%, 75%, 90%
+                        const lightness = 45 + (i % 4) * 10;  // 45%, 55%, 65%, 75%
+                        
+                        colors.push(`hsl(${Math.floor(hue * 360)}, ${saturation}%, ${lightness}%)`);
+                    }
+                }
+                
+                return colors;
+            }
+            
+            const colors = generateDistinctColors(datasets.length);
 
-            const chartDatasets = datasets.map((dataset, index) => ({
-                label: dataset.label,
-                data: dataset.data,
-                borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
-                borderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                tension: 0.3
-            }));
+            const chartDatasets = datasets.map((dataset, index) => {
+                const color = colors[index];
+                // Convert color to rgba for background (add transparency)
+                let backgroundColor;
+                if (color.startsWith('rgb(')) {
+                    backgroundColor = color.replace('rgb', 'rgba').replace(')', ', 0.1)');
+                } else if (color.startsWith('hsl(')) {
+                    // For HSL colors, create a semi-transparent version
+                    backgroundColor = color.replace('hsl(', 'hsla(').replace(')', ', 0.1)');
+                }
+                
+                return {
+                    label: dataset.label,
+                    data: dataset.data,
+                    borderColor: color,
+                    backgroundColor: backgroundColor,
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.3
+                };
+            });
 
             // Get experiment ID from input
             const experimentId = document.getElementById('experimentIdInput').value.trim();
