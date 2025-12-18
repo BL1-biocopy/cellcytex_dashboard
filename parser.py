@@ -5,6 +5,7 @@ import openpyxl
 import string
 from pathlib import Path
 import re
+from metadata_parser import MetadataParser
 
 class CytenaProcessor:
     
@@ -73,27 +74,7 @@ class CytenaProcessor:
             scan_id=None
         return scan_id
     
-    def process(self, data_dir: str):
-        """
-        Process 3D Spheroid Scan data.
-        
-        Args:
-            data_dir: Directory containing csv files from the Cytena scan instrument and an Excel file with well metadata.
-            
-        Returns:
-            ProcessingResult with processed DataFrame
-        """
-        data_dir = self._validate_directory(data_dir) 
-
-        scan_id = self._extract_scan_id(data_dir)
-
-        #define possible channels and possible measurements with units
-        possible_channels={"BF":"brightfield", "green":"green", "EC":"enhanced contrast"}
-
-        possible_attributes={"total_intensity":"AU","average_mean_intensity":"AU","relative_spheroid_area":"%",
-                             "total_spheroid_area":"mm2","relative_fluorescence_area":"%", "confluency":"%",
-                             "total_area":"mm2","object_count":"1/mm2","object_count_per_fov":"per FOV"}
-
+    def parse_position_summary_files(self, data_dir: str, possible_channels: dict, possible_attributes: dict):
         data_dict_raw={}
         for file in os.listdir(data_dir):
             if file.endswith('.csv') and 'summary_positions' in file:
@@ -121,7 +102,72 @@ class CytenaProcessor:
                 #replace the string "Position 1 - " with an empty string in all column names apart from the first column name
                 df.columns=[df.columns[0]] + [col.replace(' - Position 1','') for col in df.columns[1:]]
             else:
-                print("ERROR: Not all column names apart from the first column contain 'Position 1'")
+                return False
+        return data_dict_processed
+    
+    def parse_well_summary_files(self, data_dir: str, possible_channels: dict, possible_attributes: dict):
+        """
+        Parse well summary CSV files from Cytena scan instrument.
+        
+        Args:
+            data_dir: Directory containing csv files from the Cytena scan instrument.
+        """
+        data_dict_raw={}
+        for file in os.listdir(data_dir):
+            if file.endswith('.csv') and 'summary_wells' in file:
+                label=file.split('summary_wells_')[1].replace('.csv','')
+                #verify that label is made of possible channel + "_" + possible attribute
+                channel, attribute = label.split('_',1)
+                if channel not in possible_channels.keys():
+                    print(f"ERROR: Channel {channel} not recognized")
+                if attribute not in possible_attributes.keys():
+                    print(f"ERROR: Attribute {attribute} not recognized")
+                df=pd.read_csv(os.path.join(data_dir,file))
+                data_dict_raw[label]=df
+        
+        data_dict_processed={}
+        for label, df in data_dict_raw.items():
+            #drop the first column if it is named "Scan"
+            if df.columns[0]=='Scan':
+                df=df.drop(columns=[df.columns[0]])
+            #drop the columns named "Stdev"
+            if 'Stdev' in df.columns:
+                df=df.drop(columns=['Stdev'])
+            #Change column names from second column onwards to match first row
+            df.columns=[df.columns[0]] + df.iloc[0,1:].tolist()
+            #remove first 2 rows
+            df=df.iloc[2:,:]
+            data_dict_processed[label]=df
+        return data_dict_processed
+    
+    def process(self, data_dir: str):
+        """
+        Process 3D Spheroid Scan data.
+        
+        Args:
+            data_dir: Directory containing csv files from the Cytena scan instrument and an Excel file with well metadata.
+            
+        Returns:
+            ProcessingResult with processed DataFrame
+        """
+        data_dir = self._validate_directory(data_dir) 
+
+        scan_id = self._extract_scan_id(data_dir)
+
+        #define possible channels and possible measurements with units
+        possible_channels={"BF":"brightfield", "green":"green", "EC":"enhanced contrast"}
+
+        possible_attributes={"total_intensity":"AU","average_mean_intensity":"AU","relative_spheroid_area":"%",
+                             "total_spheroid_area":"mm2","relative_fluorescence_area":"%", "confluency":"%",
+                             "total_area":"mm2","object_count":"1/mm2","object_count_per_fov":"per FOV"}
+
+        if not self.parse_position_summary_files(data_dir, possible_channels, possible_attributes):
+            print("INFO: Multiple positions detected, switching to well summary files")
+            data_dict_processed=self.parse_well_summary_files(data_dir, possible_channels, possible_attributes)
+        else:
+            data_dict_processed=self.parse_position_summary_files(data_dir, possible_channels, possible_attributes)
+
+        for label, df in data_dict_processed.items():
             # replace "Well " with an empty string in all column names except the first column name
             df.columns=[df.columns[0]] + [col.replace('Well ','') for col in df.columns[1:]]
             #convert all columns to numeric, coerce errors
@@ -133,11 +179,18 @@ class CytenaProcessor:
 
         #find excel file in data_dir and print error if not found or multiple found
         excel_files=[file for file in os.listdir(data_dir) if file.endswith('.xlsx')]
+        metadata_parser=MetadataParser()
         if len(excel_files)==1:
             excel_path=os.path.join(data_dir,excel_files[0])
             print("Excel file found:", excel_path)
             metadata=pd.read_excel(excel_path, engine='openpyxl')  # Test if file can be opened
-            metadata["Well Group"]=metadata[metadata.columns[1:]].astype(str).agg(' '.join, axis=1) #make new column "Well Group" by combining all columns 
+            #if first column is named "Well"
+            if metadata.columns[0]=='Well':
+                print("Found excel metadata template")
+                metadata["Well Group"]=metadata[metadata.columns[1:]].astype(str).agg(' '.join, axis=1) #make new column "Well Group" by combining all columns 
+            else:
+                print("Did not find excel metadata template. Trying to parse Disco Bio Excel format")
+                metadata=metadata_parser.parse_disco_bio_excel(metadata)
         elif len(excel_files)>1:
             print("ERROR: Multiple Excel files found in data directory. Expects only one Excel file.")
         elif len(excel_files)==0:
@@ -149,13 +202,8 @@ class CytenaProcessor:
                 print("ERROR: No JSON file found in data directory. Metadata extraction is not possible.")
             elif len(json_files)==1:
                 print("JSON file found:", json_files[0])
-                metadata_dict=self._parse_json_metadata(data_dir)
-                #convert metadata_dict to dataframe with columns "Well" and "Well Group"
-                metadata_rows=[]
-                for group, wells in metadata_dict.items():
-                    for well in wells:
-                        metadata_rows.append({"Well":well, "Well Group":group})
-                metadata=pd.DataFrame(metadata_rows)
+                json_path=os.path.join(data_dir,json_files[0])
+                metadata=metadata_parser.parse_json_metadata(json_path)
         # convert all dataframes in data_dict_processed to their long format and store them in a separate dictionary called data_dict_long
         data_dict_long={}
         for label, df in data_dict_processed.items():
