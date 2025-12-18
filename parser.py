@@ -245,6 +245,9 @@ class CytenaProcessor:
         results_agg.columns=['_'.join(col).strip('_') for col in results_agg.columns.values]
         #split colname by _, if last element is mean, remove it and add _avg
         results_agg.columns = results_agg.columns.str.replace(r'_mean$', '_avg', regex=True)
+        #convert Time from minutes to hours
+        results_agg=results_agg.rename(columns={'Time':'Time_minutes'})
+        results_agg['Time']=results_agg['Time_minutes']/60
 
         results_agg['Scan ID']=scan_id
 

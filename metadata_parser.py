@@ -67,6 +67,17 @@ class MetadataParser:
             if metadata[col].dtype == object:
                 metadata[col]=metadata[col].str.replace(r' \(PPB-\d+\)', '', regex=True)
         
+        #check that first column is named ['Ab conc.\n[nM]'] and contains numeric values
+        if metadata.columns[0]!='Ab conc.\n[nM]':
+            print("First column name is invalid, expected 'Ab conc.\\n[nM]'")
+        if not pd.to_numeric(metadata['Ab conc.\n[nM]'], errors='coerce').notna().all():
+            print("First column contains non-numeric values")
+        
+        #convert 'Ab conc.\n[nM]' column to numeric
+        metadata['Ab conc.\n[nM]']=pd.to_numeric(metadata['Ab conc.\n[nM]'], errors='coerce')
+        #keep only 2 significant figures
+        metadata['Ab conc.\n[nM]']=metadata['Ab conc.\n[nM]'].round(2)
+
         #iterate through rows of df and append the entry in Ab conc.[nM] to entries in columns named 1-8
         for index, row in metadata.iterrows():
             ab_conc=row['Ab conc.\n[nM]']
